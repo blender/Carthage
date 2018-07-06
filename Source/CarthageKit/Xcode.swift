@@ -256,6 +256,9 @@ private func copyBuildProductIntoDirectory(_ directoryURL: URL, _ settings: Buil
 		.flatMap(.merge) { url in
 			return copyBCSymbolMapsForBuildProductIntoDirectory(directoryURL, settings)
 				.then(SignalProducer<URL, CarthageError>(value: url))
+		}.flatMap(.merge) { url in
+			return copydSYMForBuildProductIntoDirectory(directoryURL, settings)
+				.then(SignalProducer<URL, CarthageError>(value: url))
 		}
 }
 
@@ -264,6 +267,7 @@ private func copyBuildProductIntoDirectory(_ directoryURL: URL, _ settings: Buil
 ///
 /// Returns a signal that will send the URL after copying for each file.
 private func copyBCSymbolMapsForBuildProductIntoDirectory(_ directoryURL: URL, _ settings: BuildSettings) -> SignalProducer<URL, CarthageError> {
+
 	if settings.bitcodeEnabled.value == true {
 		return SignalProducer(result: settings.wrapperURL)
 			.flatMap(.merge) { wrapperURL in BCSymbolMapsForFramework(wrapperURL) }
@@ -271,6 +275,11 @@ private func copyBCSymbolMapsForBuildProductIntoDirectory(_ directoryURL: URL, _
 	} else {
 		return .empty
 	}
+}
+
+private func copydSYMForBuildProductIntoDirectory(_ directoryURL: URL, _ settings: BuildSettings) -> SignalProducer<URL, CarthageError> {
+	return SignalProducer(result: settings.wrapperURL.map { $0.appendingPathExtension("dSYM") })
+			.copyFileURLsIntoDirectory(directoryURL)
 }
 
 /// Attempts to merge the given executables into one fat binary, written to
@@ -490,6 +499,7 @@ public func buildScheme( // swiftlint:disable:this function_body_length cyclomat
 			}
 		}
 		.flatMap(.concat) { sdksByPlatform -> SignalProducer<(Platform, [SDK]), CarthageError> in
+			dump(sdksByPlatform)
 			if sdksByPlatform.isEmpty {
 				fatalError("No SDKs found for scheme \(scheme)")
 			}
@@ -574,20 +584,22 @@ public func buildScheme( // swiftlint:disable:this function_body_length cyclomat
 			}
 		}
 		.flatMapTaskEvents(.concat) { builtProductURL -> SignalProducer<URL, CarthageError> in
-			return UUIDsForFramework(builtProductURL)
-				.collect()
-				.flatMap(.concat) { uuids -> SignalProducer<TaskEvent<URL>, CarthageError> in
-					// Only attempt to create debug info if there is at least 
-					// one dSYM architecture UUID in the framework. This can 
-					// occur if the framework is a static framework packaged 
-					// like a dynamic framework.
-					if uuids.isEmpty {
-						return .empty
-					}
+//			return UUIDsForFramework(builtProductURL)
+//				.collect()
+//				.flatMap(.concat) { uuids -> SignalProducer<TaskEvent<URL>, CarthageError> in
+//					// Only attempt to create debug info if there is at least
+//					// one dSYM architecture UUID in the framework. This can
+//					// occur if the framework is a static framework packaged
+//					// like a dynamic framework.
+//					if uuids.isEmpty {
+//						return .empty
+//					}
+//
+//					return createDebugInformation(builtProductURL)
+//				}
+//				.then(SignalProducer<URL, CarthageError>(value: builtProductURL))
+			return SignalProducer<URL, CarthageError>(value: builtProductURL)
 
-					return createDebugInformation(builtProductURL)
-				}
-				.then(SignalProducer<URL, CarthageError>(value: builtProductURL))
 		}
 }
 
@@ -709,11 +721,7 @@ private func build(sdk: SDK, with buildArgs: BuildArguments, in workingDirectory
 								// Disable the “Generate Test Coverage Files” build
 								// setting for GCC as noted in
 								// https://developer.apple.com/library/content/qa/qa1964/_index.html.
-								"CLANG_ENABLE_CODE_COVERAGE=NO",
-
-								// Disable the "Strip Linked Product" build
-								// setting so we can later generate a dSYM
-								"STRIP_INSTALLED_PRODUCT=NO",
+								"CLANG_ENABLE_CODE_COVERAGE=NO"
 							]
 						}
 
