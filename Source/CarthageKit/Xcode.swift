@@ -839,7 +839,7 @@ public func createDebugInformation(_ builtProductURL: URL) -> SignalProducer<Tas
 	if !executableName.isEmpty {
 		let executable = builtProductURL.appendingPathComponent(executableName).path
 		let dSYM = dSYMURL.path
-		let dsymutilTask = Task("/usr/bin/xcrun", arguments: ["dsymutil", executable, "-o", dSYM])
+		let dsymutilTask = Task("/usr/bin/xcrun", arguments: ["dsymutil", "-num-threads=1", executable, "-o", dSYM])
 
 		return dsymutilTask.launch()
 			.mapError(CarthageError.taskError)
