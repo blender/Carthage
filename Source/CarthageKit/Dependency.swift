@@ -50,6 +50,29 @@ public enum Dependency: Hashable {
 	public var relativePath: String {
 		return (Constants.checkoutsFolderPath as NSString).appendingPathComponent(name)
 	}
+
+    /// SHA256 Uniquely identifying a dependecy
+    public var stableHash: String {
+        let hasher = SHA256Hasher()
+        let data: Data
+        switch self {
+        case .gitHub(let server, let repository):
+            data = server
+                .url
+                .appendingPathComponent(repository.description)
+                .absoluteString
+                .data(using: .utf8)!
+            try! hasher.hash(data)
+
+        case .git(let gitURL):
+            data = gitURL.urlString.data(using: .utf8)!
+        case .binary(let binaryURL):
+            data = binaryURL.url.absoluteString.data(using: .utf8)!
+        }
+
+        try! hasher.hash(data)
+        return try! hasher.finalize()
+    }
 }
 
 extension Dependency {
